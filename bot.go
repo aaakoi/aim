@@ -12,11 +12,14 @@ import (
 )
 
 // ========== 配置区域 ==========
-const ZhipuAPIKey = "dd0c45a81ee14876840d41ba223dd66c.E1PMOeB7Wdn33wR8"
+// 请配置你自己的 API Key，获取地址：
+// 智谱AI: https://open.bigmodel.cn/
+// DeepSeek: https://platform.deepseek.com/
+const ZhipuAPIKey = ""
 const ZhipuAPIURL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
-// DeepSeek 配置（填入你的key）
-const DeepSeekAPIKey = "sk-448041a5313041bbbd353916dfa96bf1"
+// DeepSeek 配置
+const DeepSeekAPIKey = ""
 const DeepSeekAPIURL = "https://api.deepseek.com/v1/chat/completions"
 
 // AI 服务地址（分布式架构）

@@ -1,5 +1,6 @@
 # 编译产物
 *.exe
+*.exe~
 aim-server
 aim
 
@@ -15,6 +16,7 @@ aim
 # IDE
 .idea/
 .vscode/
+.vs/
 *.swp
 
 # 系统文件
@@ -27,3 +29,8 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+test_*.txt
+test_time.go
+
+# Claude 配置
+.claude/
