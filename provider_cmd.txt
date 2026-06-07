@@ -1,0 +1,20 @@
+		} else if strings.HasPrefix(input, "/provider ") {
+			// 切换AI提供商: /provider zhipu 或 /provider openai
+			provider := strings.TrimPrefix(input, "/provider ")
+			provider = strings.TrimSpace(provider)
+			switch provider {
+			case "zhipu":
+				c.hub.botManager.SetProvider(&ZhipuProvider{})
+				c.Send <- []byte("已切换到智谱AI")
+			case "openai":
+				c.hub.botManager.SetProvider(&OpenAIProvider{})
+				c.Send <- []byte("已切换到OpenAI（需配置API Key）")
+			default:
+				c.Send <- []byte("不支持的提供商，可选: zhipu, openai")
+			}
+			continue
+		} else if input == "/providers" {
+			// 查看当前AI提供商
+			c.Send <- []byte(fmt.Sprintf("当前AI提供商: %s", c.hub.botManager.GetProvider().Name()))
+			c.Send <- []byte("可用提供商: zhipu, openai")
+			continue

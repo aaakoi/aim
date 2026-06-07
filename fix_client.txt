@@ -1,0 +1,11 @@
+			c.hub.SetCandidates(c.ID, candidates)
+			var result strings.Builder
+			result.WriteString("===== 候选回复 =====\n")
+			for _, cand := range candidates {
+				result.WriteString(fmt.Sprintf("[%d] %s\n", cand.Index, cand.Content))
+			}
+			result.WriteString("使用 /use N 选择第N条回复发送")
+			c.Send <- []byte(result.String())
+			continue
+		} else if strings.HasPrefix(input, "/use ") {
+			// 选择候选回复发送: /use 1 @用户名 或 /use 1 (广播)
