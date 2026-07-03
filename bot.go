@@ -3,23 +3,29 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ========== 配置区域 ==========
 // 请配置你自己的 API Key，获取地址：
 // 智谱AI: https://open.bigmodel.cn/
 // DeepSeek: https://platform.deepseek.com/
-const ZhipuAPIKey = ""
+const ZhipuAPIKey = "dd0c45a81ee14876840d41ba223dd66c.E1PMOeB7Wdn33wR8"
 const ZhipuAPIURL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 // DeepSeek 配置
-const DeepSeekAPIKey = ""
+const DeepSeekAPIKey = "sk-448041a5313041bbbd353916dfa96bf1"
 const DeepSeekAPIURL = "https://api.deepseek.com/v1/chat/completions"
 
 // AI 服务地址（分布式架构）
@@ -27,17 +33,17 @@ const AIServiceURL = "http://localhost:8081"
 
 // ========== 服务治理配置 ==========
 const (
-	APITimeout    = 30 * time.Second // API 超时时间
-	MaxRetries    = 3                 // 最大重试次数
-	RetryBaseWait = 1 * time.Second  // 重试基础等待时间
-	RateLimitQPS  = 10                // 每秒最多10个请求
-	CircuitThreshold = 5              // 连续失败5次触发熔断
+	APITimeout       = 30 * time.Second // API 超时时间
+	MaxRetries       = 3                // 最大重试次数
+	RetryBaseWait    = 1 * time.Second  // 重试基础等待时间
+	RateLimitQPS     = 10               // 每秒最多10个请求
+	CircuitThreshold = 5                // 连续失败5次触发熔断
 	CircuitTimeout   = 30 * time.Second // 熔断持续30秒
 )
 
 // ========== 限流器和熔断器实例 ==========
 var (
-	apiRateLimiter  = NewRateLimiter(RateLimitQPS)
+	apiRateLimiter    = NewRateLimiter(RateLimitQPS)
 	apiCircuitBreaker = NewCircuitBreaker(CircuitThreshold, CircuitTimeout)
 )
 
@@ -786,19 +792,35 @@ func (bm *BotManager) HandleBotMessageStream(botID, from, content string, onToke
 		return
 	}
 
+	// ========== 链路追踪开始 ==========
+	tracer := otel.Tracer("aim-bot")
+	_, span := tracer.Start(context.Background(), "HandleBotMessageStream",
+		trace.WithAttributes(
+			attribute.String("bot.id", botID),
+			attribute.String("user", from),
+			attribute.String("provider", bm.provider.Name()),
+		))
+	defer span.End()
+
 	// 根据提供商调用不同的流式 API
 	var err error
 	switch bm.provider.Name() {
 	case "deepseek":
 		err = callDeepSeekStream(content, onToken)
+		span.SetAttributes(attribute.String("api.provider", "deepseek"))
 	default:
 		err = callZhipuStream(content, onToken)
+		span.SetAttributes(attribute.String("api.provider", "zhipu"))
 	}
 
 	// ========== 降级处理 ==========
 	if err != nil {
 		// 记录失败
 		RecordBotRequest(bm.provider.Name(), "error")
+
+		// ========== 链路追踪记录错误 ==========
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 
 		// 根据错误类型返回友好的降级消息
 		var downgradeMsg string
@@ -812,6 +834,8 @@ func (bm *BotManager) HandleBotMessageStream(botID, from, content string, onToke
 		onToken(downgradeMsg, true)
 	} else {
 		RecordBotRequest(bm.provider.Name(), "success")
+		// ========== 链路追踪记录成功 ==========
+		span.SetStatus(codes.Ok, "success")
 	}
 }
 
@@ -831,7 +855,7 @@ func callZhipuStream(content string, onToken StreamCallback) error {
 // callZhipuStreamOnce 单次流式调用（内部函数）
 func callZhipuStreamOnce(content string, onToken StreamCallback) error {
 	reqBody := map[string]interface{}{
-		"model": "glm-4-flash",
+		"model":  "glm-4-flash",
 		"stream": true,
 		"messages": []map[string]string{
 			{"role": "system", "content": "你是一个友好的AI助手。"},
@@ -919,7 +943,7 @@ func callDeepSeekStream(content string, onToken StreamCallback) error {
 // callDeepSeekStreamOnce 单次流式调用（内部函数）
 func callDeepSeekStreamOnce(content string, onToken StreamCallback) error {
 	reqBody := map[string]interface{}{
-		"model": "deepseek-chat",
+		"model":  "deepseek-chat",
 		"stream": true,
 		"messages": []map[string]string{
 			{"role": "system", "content": "你是一个友好的AI助手。"},
